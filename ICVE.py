@@ -6,7 +6,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 base_url = 'https://jjzyjsxy.zjy2.icve.com.cn'
-driver = webdriver.Firefox()
+driver = webdriver.Edge()
 
 def Waiting(aim, elem, outTime = 10):
     WebDriverWait(aim, outTime, 0.5).until(EC.presence_of_element_located(elem))

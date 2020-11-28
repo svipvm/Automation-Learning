@@ -1,185 +1,168 @@
-from selenium import webdriver
-import re, os, time
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
+import requests, time, os, json, random, datetime
 
-base_url = 'https://jjzyjsxy.zjy2.icve.com.cn'
-driver = webdriver.Edge()
+verify_url = 'https://zjy2.icve.com.cn/api/common/VerifyCode/index?t='
+login_url = 'https://zjy2.icve.com.cn/api/common/login/login'
+inform_url = 'https://zjy2.icve.com.cn/api/student/learning/getLearnningCourseList'
+get_topic_url = 'https://zjy2.icve.com.cn/api/study/process/getTopicByModuleId'
+get_cell_url = 'https://zjy2.icve.com.cn/api/study/process/getCellByTopicId'
+view_url = 'https://zjy2.icve.com.cn/api/common/Directory/viewDirectory'
+status_url = 'https://mooc.icve.com.cn/study/learn/statStuProcessCellLogAndTimeLong'
 
-def Waiting(aim, elem, outTime = 10):
-    WebDriverWait(aim, outTime, 0.5).until(EC.presence_of_element_located(elem))
+class ICVE:
+    headers = {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit'
+    }
 
-def loginICVE():
-    text_username = driver.find_element_by_name('userName')
-    text_password = driver.find_element_by_name('userPassword')
-    text_verifyCode = driver.find_element_by_name('photoCode')
-    text_verifyCode.send_keys(input('请输入验证码：'))
-    text_username.send_keys(os.environ['ICVEUSER'])
-    text_password.send_keys(os.environ['ICVEPASS'])
-    driver.find_element_by_id('btnLogin').click()
+    def __init__(self):
+        self.headers = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit'
+        }
+        self.username = None
+        self.password = None
+        self.sesson = None
+        self.courseOpenId = None
+        self.openClassId = None
+        self.moduleId = None
+        self.topicId = None
+        self.cellId = None
 
-def getLearningList():
-    Waiting(driver, (By.CLASS_NAME, 'kt-lesson-li'))
-    lesson_list = driver.find_elements_by_class_name('kt-lesson-li')
-    result_list = []
-    for lesson in lesson_list:
-        infor = {}
-        html = lesson.get_attribute('innerHTML')
-        try:
-            href = re.search(r'href="(.*?)"', html).group(1)
-            title = re.search(r'title="(.*?)"', html).group(1)
-            complete = re.search(r'20px">(.*?)</span>', html).group(1)
-            infor['title'] = title
-            infor['href'] = href
-            infor['complete'] = complete
-            result_list.append(infor)
-        except:
-            pass
+    def run(self, username, password):
+        self.username = username
+        self.password = password
+        self.sesson = requests.session()
+        self.save_verify_code(round(time.time() * 1000))
+        self.login_mooc()
+        lesson_list = self.get_lesson()
+        self.select_lesson(lesson_list)
 
-    return result_list
+    def save_verify_code(self, value):
+        r = self.sesson.get(verify_url.format(value), headers=self.headers)
+        with open('verify.jpg', 'wb') as file:
+            file.write(r.content)
 
-def getCourse(href):
-    print('正在获取节点资源……')
-    # 进入课程页面
-    url = (base_url + href).replace('amp;', '').replace('jjzyjsxy.', '')
-    driver.get(url)
-    # 获取所有课的信息
-    Waiting(driver, (By.CLASS_NAME, 'moduleList'))
-    moduleList = driver.find_elements_by_class_name('moduleList')
-    for module in moduleList:
-        try:
-            Waiting(module, (By.CLASS_NAME, 'openOrCloseModule'))
-            openOrClose = module.find_element_by_class_name('openOrCloseModule')
-            Waiting(module, (By.CLASS_NAME, 'topic_container'))
-            content = module.find_element_by_class_name('topic_container')
-            if content.get_attribute('innerHTML') == '':
-                openOrClose.click()
-            Waiting(module, (By.TAG_NAME, 'a'))
-            expandList = module.find_elements_by_tag_name('a')
-            for expand in expandList:
-                expand.click()
-                try:
-                    module.find_element_by_class_name('sgBtn').click()
-                except:
-                    continue
-        except:
-            pass
-            # time.sleep(0.5)
+    def login_mooc(self):
+        data = {
+            'userName': self.username,
+            'userPwd': self.password,
+            'verifyCode': input("input verify code: ")
+        }
+        self.sesson.post(login_url, headers=self.headers, data=data)
 
-    # 在获取的课中选出未解决的课
-    print('正在获取未完成节点资源……')
-    pendingList = []
-    spanList = driver.find_elements_by_class_name('sh-res-b')
-    hrefList = driver.find_elements_by_class_name('isOpenModulePower')
-    for x in range(0, len(spanList)):
-        title = hrefList[x].get_attribute('title')
-        content = spanList[x].get_attribute('innerHTML')
-        color = re.search(r'color:(.*?)"', content)
-        kind = spanList[x].find_element_by_xpath('./span').get_attribute('textContent')
-        try:
-            if color.group(1).replace(';', '') == '#fff':
-                continue
-            result = {
-                'title' : title,
-                'kind' : ''.join(kind.split()),
-                'href' : hrefList[x].get_attribute('data-href')
-            }
-            pendingList.append(result)
-        except:
-            pass
+    def get_lesson(self):
+        r = self.sesson.get(inform_url, headers=self.headers)
+        data = json.loads(r.content.decode("utf-8"))
+        return data['courseList']
 
-    print('已获取所有节点资源，共有', len(pendingList), '个节点待学习！\n')
-    return pendingList
+    def select_lesson(self, lesson_list):
+        while True:
+            self.print_menu(lesson_list)
+            index = int(input('请输出课程序号（-1退出）：'))
+            if index <= 0 or len(lesson_list) < index: break
+            print('\n-------------------------------')
+            self.courseOpenId = lesson_list[index - 1]['courseOpenId']
+            self.openClassId = lesson_list[index - 1]['openClassId']
+            print('开始学习', lesson_list[index - 1]['courseName'])
+            proces_list = self.get_proces_list()
+            self.solve_lesson(proces_list)
+            print('开始完成', lesson_list[index - 1]['courseName'])
+            print('-------------------------------\n')
 
-# {'title': '2.1.1.mp4', 'kind': '视频', 'href': '/common/directory/directory.html?courseOpenId=qtvaxgpoydgidrf2vrla&openClassId=9ihoav2rzqto0bcacs8hw&cellId=zjd1ayip1k9lplu9ydg2a&flag=s'}
-def solveCourse(pendingList):
-    for x in range(0, len(pendingList)):
-        print('正在学习', (x + 1), '/', len(pendingList), '：')
-        print('\t\t', pendingList[x]['kind'], pendingList[x]['title'], '学习中')
-        url = base_url + pendingList[x]['href']
-        try:
-            driver.get(url.replace('jjzyjsxy.', ''))
-            try:
-                Waiting(driver, (By.ID, 'studyNow'), 3)
-                driver.find_element_by_id('studyNow').click()
-            except:
-                pass
-            if pendingList[x]['kind'] == '文档' or pendingList[x]['kind'] == '文本':
-                Waiting(driver, (By.CLASS_NAME, 'MPreview-pageCount'))
-                span = driver.find_element_by_class_name('MPreview-pageCount')
-                count = int(span.find_element_by_xpath('./em').get_attribute('textContent'))
-                Waiting(driver, (By.CLASS_NAME, 'MPreview-pageNext'))
-                nextPage = driver.find_element_by_class_name('MPreview-pageNext')
-                for i in range(count):
-                    nextPage.click()
-                    time.sleep(0.3)
-                time.sleep(30)
-            elif pendingList[x]['kind'] == 'ppt': #MPreview-arrowBottom stage-next-btn
-                time.sleep(2)
-                try:
-                    Waiting(driver, (By.CLASS_NAME, 'MPreview-arrowBottom'), outTime=3)
-                    goal = 'MPreview-arrowBottom'
-                except:
-                    goal = 'stage-next-btn'
-                for x in range(0, 200):
-                    try:
-                        driver.find_element_by_class_name(goal).click()
-                    except:
-                        break
-                    time.sleep(0.1)
-                time.sleep(1)
-            elif pendingList[x]['kind'] == '图文' or pendingList[x]['kind'] == '压缩包':
-                time.sleep(30)
-            elif pendingList[x]['kind'] == '视频':
-                try:
-                    Waiting(driver, (By.CLASS_NAME, 'jw-icon-hd'))
-                    driver.find_element_by_class_name('jw-icon-hd').click()
-                    for x in range(3, -1, -1):
-                        try:
-                            driver.find_element_by_class_name('jw-item-' + str(x)).click()
-                            break
-                        except:
-                            pass
-                except:
-                    Waiting(driver, (By.CLASS_NAME, 'jw-slider-horizontal'))
-                    driver.find_element_by_class_name('jw-slider-horizontal').click()
-                    driver.find_element_by_class_name('jw-icon-playback').click()
-                Waiting(driver, (By.CLASS_NAME, 'jw-text-duration'))
-                endTime = '00:00'
-                while endTime == '00:00':
-                    endTime = driver.find_element_by_class_name('jw-text-duration').get_attribute('textContent')
-                    time.sleep(0.5)
-                Waiting(driver, (By.CLASS_NAME, 'jw-text-elapsed'))
-                nowTime = '--:--'
-                while nowTime != endTime:
-                    nowTime = driver.find_element_by_class_name('jw-text-elapsed').get_attribute('textContent')
-                    time.sleep(0.9)
-                # pass
-            elif pendingList[x]['kind'] == '图片':
-                time.sleep(30)
-            else:
-                print(pendingList[x])
-        except: continue
+    def print_menu(self, lesson_list):
+        print('-------------------------------')
+        for index in range(len(lesson_list)):
+            lesson = lesson_list[index]
+            print(index + 1, ':', lesson['courseName'], str(lesson['totalScore']) + '分', str(lesson['process']) + '%')
+        print('-------------------------------')
 
-        print('\t', '已学习')
+    def get_proces_list(self):
+        url = 'https://zjy2.icve.com.cn/api/study/process/getProcessList'
+        data = {
+            'courseOpenId': self.courseOpenId,
+            'openClassId': self.openClassId
+        }
+        r = self.sesson.post(url, headers=self.headers, data=data)
+        data = json.loads(r.content.decode('utf-8'))
+        proces_list = []
+        for module in data['progress']['moduleList']:
+            proces_list.append({'id': module['id'], 'name': module['name']})
+        return proces_list
+
+    def solve_lesson(self, proces_list):
+        data1 = {
+            'courseOpenId': self.courseOpenId
+        }
+        data2 = {
+            'courseOpenId': self.courseOpenId,
+            'openClassId': self.openClassId
+        }
+        for i in range(len(proces_list)):
+            data1['moduleId'] = proces_list[i]['id']
+            self.moduleId = data1['moduleId']
+            r = self.sesson.post(get_topic_url, headers=self.headers, data=data1)
+            conetent = json.loads(r.content.decode('utf-8'))
+            topic_list = conetent['topicList']
+            print(proces_list[i]['name'])
+            for topic in topic_list:
+                data2['topicId'] = topic['id']
+                self.topicId = data2['topicId']
+                r = self.sesson.post(get_cell_url, headers=self.headers, data=data2)
+                content = json.loads(r.content.decode('utf-8'))
+                cell_list = content['cellList']
+                for cell in cell_list:
+                    self.cellId = cell['Id']
+                    print('\t', cell['categoryNameDb'], cell['cellName'])
+                    if cell['categoryName'] == '子节点':
+                        for node in cell['childNodeList']:
+                            self.solve_node(node)
+                    else:
+                        self.solve_node(cell)
+
+    def solve_node(self, node):
+        stuCellCount = node['stuCellCount']
+        if stuCellCount == False:
+            print('\t× 未完成', node['cellName'])
+            self.cellId = node['Id']
+            # self.viewDirectory()
+        print('\t√ 已完成', node['cellName'])
+
+    def viewDirectory(self):
+        data = {
+            'courseOpenId': self.courseOpenId,
+            'openClassId': self.openClassId,
+            'moduleId': self.moduleId,
+            'cellId': self.cellId
+        }
+        r = self.sesson.post(view_url, headers=self.headers, data=data)
+        content = json.loads(r.text)
+        CategoryName = content['courseCell']['CategoryName']
+        VideoTimeLong = content['courseCell']['VideoTimeLong']
+        if CategoryName == '测验' or CategoryName == '作业':
+            time.sleep(3)
+            return
+        if 3600 < VideoTimeLong:
+            time.sleep(3)
+            return
+        data['videoTimeTotalLong'] = VideoTimeLong
+        if VideoTimeLong < 10:
+            VideoTimeLong = random.randrange(10, 30)
+        start_time = datetime.datetime.now()
+        end_time = (start_time + datetime.timedelta(seconds=VideoTimeLong)).strftime("%H:%M:%S")
+        start_time = start_time.strftime('%H:%M:%S')
+        # 图片, 视频, 其它, 文档, ppt, 压缩包, 测验
+        print('\t\t类型：' + CategoryName + '，' + start_time, '开始学习，预计', end_time, '结束')
+        time.sleep(VideoTimeLong)
+        if CategoryName == '视频':
+            data['auvideoLength'] = data['videoTimeTotalLong']
+            data['sourceForm'] = 1229
+        else:
+            data['sourceForm'] = 1030
+        r = self.sesson.post(status_url, headers=self.headers, data=data)
+        if json.loads(r.text)['isStudy']:
+            print('\t\t\t√ 学习完成 √')
+        else:
+            print('\t\t\t× 学习失败 ×')
+
 
 if __name__ == '__main__':
-    driver.get('https://zjy2.icve.com.cn/portal/login.html')
-    loginICVE()
-    course_list = getLearningList()
-    while True:
-        print('\n----------------------------------------------')
-        for x in range(0, len(course_list)):
-            course = course_list[x]
-            print(str(x + 1) + "：" + course['title'] + " " + course['complete'])
-        try:
-            index = int(input("请输入要操作课程的编号："))
-            print('----------------------------------------------\n')
-            if index < 1 or len(course_list) < index: break
-            pendingList = getCourse(course_list[index - 1]['href'])
-            solveCourse(pendingList)
-        except:
-            break
-    print("欢迎下次使用！")
+    icve = ICVE()
+    icve.run('201820800124', 'Shadow24')

@@ -1,22 +1,9 @@
 import requests, time, os, json, random, datetime
 
-verify_url = 'https://zjy2.icve.com.cn/api/common/VerifyCode/index?t='
-login_url = 'https://zjy2.icve.com.cn/api/common/login/login'
-inform_url = 'https://zjy2.icve.com.cn/api/student/learning/getLearnningCourseList'
-get_topic_url = 'https://zjy2.icve.com.cn/api/study/process/getTopicByModuleId'
-get_cell_url = 'https://zjy2.icve.com.cn/api/study/process/getCellByTopicId'
-view_url = 'https://zjy2.icve.com.cn/api/common/Directory/viewDirectory'
-status_url = 'https://mooc.icve.com.cn/study/learn/statStuProcessCellLogAndTimeLong'
-
 class ICVE:
-    headers = {
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit'
-    }
-
     def __init__(self):
-        self.headers = {
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit'
-        }
+        self.headers = { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit' }
+        self.kind_list = ['视频', '压缩包', '文档', '简单文本', 'ppt']
         self.username = None
         self.password = None
         self.sesson = None
@@ -36,20 +23,23 @@ class ICVE:
         self.select_lesson(lesson_list)
 
     def save_verify_code(self, value):
-        r = self.sesson.get(verify_url.format(value), headers=self.headers)
+        url = 'https://zjy2.icve.com.cn/api/common/VerifyCode/index?t='
+        r = self.sesson.get(url.format(value), headers=self.headers)
         with open('verify.jpg', 'wb') as file:
             file.write(r.content)
 
     def login_mooc(self):
+        url = 'https://zjy2.icve.com.cn/api/common/login/login'
         data = {
             'userName': self.username,
             'userPwd': self.password,
             'verifyCode': input("input verify code: ")
         }
-        self.sesson.post(login_url, headers=self.headers, data=data)
+        self.sesson.post(url, headers=self.headers, data=data)
 
     def get_lesson(self):
-        r = self.sesson.get(inform_url, headers=self.headers)
+        url = 'https://zjy2.icve.com.cn/api/student/learning/getLearnningCourseList'
+        r = self.sesson.get(url, headers=self.headers)
         data = json.loads(r.content.decode("utf-8"))
         return data['courseList']
 
@@ -71,7 +61,8 @@ class ICVE:
         print('-------------------------------')
         for index in range(len(lesson_list)):
             lesson = lesson_list[index]
-            print(index + 1, ':', lesson['courseName'], str(lesson['totalScore']) + '分', str(lesson['process']) + '%')
+            print(index + 1, ':', lesson['courseName'],
+                  str(lesson['totalScore']) + '分', str(lesson['process']) + '%')
         print('-------------------------------')
 
     def get_proces_list(self):
@@ -88,6 +79,8 @@ class ICVE:
         return proces_list
 
     def solve_lesson(self, proces_list):
+        get_topic_url = 'https://zjy2.icve.com.cn/api/study/process/getTopicByModuleId'
+        get_cell_url = 'https://zjy2.icve.com.cn/api/study/process/getCellByTopicId'
         data1 = {
             'courseOpenId': self.courseOpenId
         }
@@ -122,45 +115,76 @@ class ICVE:
         if stuCellCount == False:
             print('\t× 未完成', node['cellName'])
             self.cellId = node['Id']
-            # self.viewDirectory()
-        print('\t√ 已完成', node['cellName'])
+            flag = self.viewDirectory(node['categoryName'], node['cellName'])
+            if flag:
+                print('\t√ 已完成', node['cellName'])
+            else:
+                time.sleep(2)
+                print('\t× 学习失败', node['cellName'])
+        else:
+            print('\t√ 已完成', node['cellName'])
 
-    def viewDirectory(self):
+    def view(self, _kind, _logId, _time, _num, _token):
+        url = 'https://zjy2.icve.com.cn/api/common/Directory/stuProcessCellLog'
+        data = {
+            'courseOpenId': self.courseOpenId,
+            'openClassId': self.openClassId,
+            'cellId': self.cellId,
+            'picNum': _num,
+            'studyNewlyTime': _time,
+            'studyNewlyPicNum': _num,
+            'token': _token
+        }
+        if _time < 10:
+            _time = random.randrange(10, 20)
+        start_time = datetime.datetime.now()
+        end_time = (start_time + datetime.timedelta(seconds=int(_time))).strftime("%H:%M:%S")
+        start_time = start_time.strftime('%H:%M:%S')
+        # 图片, 视频, 其它, 文档, ppt, 压缩包, 测验
+        print('\t\t类型：' + _kind + '，' + start_time, '开始学习，预计', end_time, '结束')
+        time.sleep(_time)
+        r = self.sesson.post(url, headers=self.headers, data=data)
+        return json.loads(r.text)['code'] == 1
+
+    def changeProcess(self, cellName):
+        url = 'https://zjy2.icve.com.cn/api/common/Directory/changeStuStudyProcessCellData'
         data = {
             'courseOpenId': self.courseOpenId,
             'openClassId': self.openClassId,
             'moduleId': self.moduleId,
-            'cellId': self.cellId
+            'cellId': self.cellId,
+            'cellName': cellName
         }
-        r = self.sesson.post(view_url, headers=self.headers, data=data)
+        self.sesson.post(url, headers=self.headers, data=data)
+
+
+    def viewDirectory(self, kind, cellName):
+        url = 'https://zjy2.icve.com.cn/api/common/Directory/viewDirectory'
+        data = {
+            'courseOpenId': self.courseOpenId,
+            'openClassId': self.openClassId,
+            'moduleId': self.moduleId,
+            'cellId': self.cellId,
+            'flag': 's'
+        }
+        r = self.sesson.post(url, headers=self.headers, data=data)
         content = json.loads(r.text)
-        CategoryName = content['courseCell']['CategoryName']
-        VideoTimeLong = content['courseCell']['VideoTimeLong']
-        if CategoryName == '测验' or CategoryName == '作业':
-            time.sleep(3)
-            return
-        if 3600 < VideoTimeLong:
-            time.sleep(3)
-            return
-        data['videoTimeTotalLong'] = VideoTimeLong
-        if VideoTimeLong < 10:
-            VideoTimeLong = random.randrange(10, 30)
-        start_time = datetime.datetime.now()
-        end_time = (start_time + datetime.timedelta(seconds=VideoTimeLong)).strftime("%H:%M:%S")
-        start_time = start_time.strftime('%H:%M:%S')
-        # 图片, 视频, 其它, 文档, ppt, 压缩包, 测验
-        print('\t\t类型：' + CategoryName + '，' + start_time, '开始学习，预计', end_time, '结束')
-        time.sleep(VideoTimeLong)
-        if CategoryName == '视频':
-            data['auvideoLength'] = data['videoTimeTotalLong']
-            data['sourceForm'] = 1229
-        else:
-            data['sourceForm'] = 1030
-        r = self.sesson.post(status_url, headers=self.headers, data=data)
-        if json.loads(r.text)['isStudy']:
-            print('\t\t\t√ 学习完成 √')
-        else:
-            print('\t\t\t× 学习失败 ×')
+        if content['code'] == -100:
+            self.changeProcess(cellName)
+            r = self.sesson.post(url, headers=self.headers, data=data)
+            content = json.loads(r.text)
+        try:
+            print(content['downLoadUrl'])
+            _logID = content['cellLogId']
+            _time = content['audioVideoLong']
+            _num = content['pageCount']
+            _token = content['guIdToken']
+            if kind in self.kind_list:
+                return self.view(kind, _logID, _time, _num, _token)
+            else:
+                return False
+        except:
+            return False
 
 
 if __name__ == '__main__':

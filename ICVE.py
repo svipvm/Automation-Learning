@@ -174,7 +174,6 @@ class ICVE:
             r = self.sesson.post(url, headers=self.headers, data=data)
             content = json.loads(r.text)
         try:
-            print(content['downLoadUrl'])
             _logID = content['cellLogId']
             _time = content['audioVideoLong']
             _num = content['pageCount']

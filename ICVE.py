@@ -103,7 +103,7 @@ class ICVE:
                 cell_list = content['cellList']
                 for cell in cell_list:
                     self.cellId = cell['Id']
-                    print('\t', cell['categoryNameDb'], cell['cellName'])
+                    # print('\t', cell['categoryNameDb'], cell['cellName'])
                     if cell['categoryName'] == '子节点':
                         for node in cell['childNodeList']:
                             self.solve_node(node)
@@ -111,8 +111,11 @@ class ICVE:
                         self.solve_node(cell)
 
     def solve_node(self, node):
-        stuCellCount = node['stuCellCount']
-        if stuCellCount == False:
+        try:
+            stuCellCount = node['stuCellCount']
+        except:
+            stuCellCount = node['stuCellFourCount']
+        if stuCellCount == 0:
             print('\t× 未完成', node['cellName'])
             self.cellId = node['Id']
             flag = self.viewDirectory(node['categoryName'], node['cellName'])

@@ -19,8 +19,8 @@ class ICVE:
         self.sesson = requests.session()
         self.save_verify_code(round(time.time() * 1000))
         self.login_mooc()
-        lesson_list = self.get_lesson()
-        self.select_lesson(lesson_list)
+        # lesson_list = self.get_lesson()
+        self.select_lesson()
 
     def save_verify_code(self, value):
         url = 'https://zjy2.icve.com.cn/api/common/VerifyCode/index?t='
@@ -37,14 +37,18 @@ class ICVE:
         }
         self.sesson.post(url, headers=self.headers, data=data)
 
-    def get_lesson(self):
-        url = 'https://zjy2.icve.com.cn/api/student/learning/getLearnningCourseList'
-        r = self.sesson.get(url, headers=self.headers)
-        data = json.loads(r.content.decode("utf-8"))
-        return data['courseList']
+    # def get_lesson(self):
+    #     url = 'https://zjy2.icve.com.cn/api/student/learning/getLearnningCourseList'
+    #     r = self.sesson.get(url, headers=self.headers)
+    #     data = json.loads(r.content.decode("utf-8"))
+    #     return data['courseList']
 
-    def select_lesson(self, lesson_list):
+    def select_lesson(self):
+        url = 'https://zjy2.icve.com.cn/api/student/learning/getLearnningCourseList'
         while True:
+            r = self.sesson.get(url, headers=self.headers)
+            data = json.loads(r.content.decode("utf-8"))
+            lesson_list = data['courseList']
             self.print_menu(lesson_list)
             index = int(input('请输出课程序号（-1退出）：'))
             if index <= 0 or len(lesson_list) < index: break

@@ -98,11 +98,15 @@ class ICVE:
 
     def solve_node(self, node):
         isStudyFinish = node['isStudyFinish']
+        finishFlag = True
         if isStudyFinish == False:
-            print('\t× 未完成', node['cellName'])
+            print('\t· 欲完成', node['cellName'])
             self.cellId = node['Id']
-            self.viewDirectory()
-        print('\t√ 已完成', node['cellName'])
+            finishFlag = self.viewDirectory()
+        if finishFlag:
+            print('\t√ 已完成', node['cellName'])
+        else:
+            print('\t× 未完成', node['cellName'])
 
     def viewDirectory(self):
         view_url = 'https://mooc.icve.com.cn/study/learn/viewDirectory'
@@ -138,11 +142,11 @@ class ICVE:
         else:
             data['sourceForm'] = 1030
         r = self.sesson.post(status_url, headers=self.headers, data=data)
-        if json.loads(r.text)['isStudy']:
-            print('\t\t\t√ 学习完成 √')
-        else:
-            print('\t\t\t× 学习失败 ×')
-
+        # if json.loads(r.text)['isStudy']:
+        #     print('\t\t\t√ 学习完成 √')
+        # else:
+        #     print('\t\t\t× 学习失败 ×')
+        return json.loads(r.text)['isStudy']
 
 
 if __name__ == '__main__':

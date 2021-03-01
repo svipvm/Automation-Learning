@@ -120,7 +120,7 @@ class ICVE:
         except:
             stuCellCount = node['stuCellFourCount']
         if stuCellCount == 0:
-            print('\t× 未完成', node['cellName'])
+            print('\t· 欲完成', node['cellName'])
             self.cellId = node['Id']
             flag = self.viewDirectory(node['categoryName'], node['cellName'])
             if flag:
@@ -138,7 +138,7 @@ class ICVE:
             'openClassId': self.openClassId,
             'cellId': self.cellId,
             'picNum': _num,
-            'studyNewlyTime': _time,
+            'studyNewlyTime': None,
             'studyNewlyPicNum': _num,
             'token': _token
         }
@@ -149,7 +149,16 @@ class ICVE:
         start_time = start_time.strftime('%H:%M:%S')
         # 图片, 视频, 其它, 文档, ppt, 压缩包, 测验
         print('\t\t类型：' + _kind + '，' + start_time, '开始学习，预计', end_time, '结束')
-        time.sleep(_time)
+        # time.sleep(_time)
+        sum_time = 0.0
+        while sum_time + 10 < _time:
+            sum_time += 10
+            time.sleep(10)
+            data['studyNewlyTime'] = sum_time
+            r = self.sesson.post(url, headers=self.headers, data=data)
+            # print(json.loads(r.text))
+        time.sleep(_time - sum_time)
+        data['studyNewlyTime'] = _time
         r = self.sesson.post(url, headers=self.headers, data=data)
         return json.loads(r.text)['code'] == 1
 
